@@ -3,6 +3,7 @@ __pycache__
 *.DS_Store
 logs
 .vscode
+.env
 contrib/prepare_custom_messages/messages_data/*
 
 logs/*
