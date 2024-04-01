@@ -3,6 +3,7 @@
 
 import argparse
 import logging
+import getpass
 import os
 from datetime import datetime
 
@@ -83,6 +84,12 @@ def main():
         fh = logging.FileHandler(output_path)
         logger = logging.getLogger()
         logger.addHandler(fh)
+        region = args.api_base_endpoint[0].split('-')[3] if args.api_base_endpoint else 'unknown'        
+        username = getpass.getuser()
+        logger.info(f"User {username} is running tests with Clients: {args.clients}, "
+                    f"Requests: {args.requests}, Duration: {args.duration}, "
+                    f"Deployment: {args.deployment}, API Version: {args.api_version}, "
+                    f"Region: {region}")
 
     if "func" in args:
         args.func(args)

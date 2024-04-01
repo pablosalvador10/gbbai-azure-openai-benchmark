@@ -1,0 +1,11 @@
+{
+    "Total Time": 4228.714999999676,
+    "Total Requests": 250,
+    "Total Successful Requests": 250,
+    "Total Unsuccessful Requests": 0,
+    "Requests per Minute": 83.33333333333333,
+    "Average Time per Request": 16.914859999998704,
+    "Min Time per Request": 7.217999999993481,
+    "Max Time per Request": 21.20299999997951,
+    "Median Time per Request": 17.64900000000489
+}

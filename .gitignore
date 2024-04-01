@@ -6,4 +6,4 @@ logs
 .env
 contrib/prepare_custom_messages/messages_data/*
 
-logs/*
+

@@ -227,6 +227,10 @@ Setting `--prevent-server-caching=false` is only recommended when a sufficiently
 
 Note: Prior to the benchmarking run reaching `aggregation-window` in elapsed time, all sliding window stats will be calculated over a dynamic window, equal to the time elapsed since starting the test. This ensures RPM/TPM stats are relatively accurate prior to the test reaching completion, including when a test ends early due to reaching the request limit.
 
+## 🔧 Prerequisites
+
+Please make sure you have met all the prerequisites for this project. A detailed guide on how to set up your environment and get ready to run all the notebooks and code in this repository can be found in the [SETTINGS.md](SETTINGS.md) file. Please follow the instructions there to ensure a smooth exprience.
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
