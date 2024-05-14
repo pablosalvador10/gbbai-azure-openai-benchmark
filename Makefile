@@ -44,7 +44,6 @@ fix_code_quality:
 	black .
 	isort .
 	ruff --fix .
-	interrogate src -v -i --fail-under=80 -e 'src/**/__init__.py'
 
 # Targets for running tests
 run_unit_tests:
