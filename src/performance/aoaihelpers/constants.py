@@ -23,5 +23,4 @@ AZURE_REGION_TO_TIMEZONE = {
     "Japan East": "Asia/Tokyo",
     "Korea Central": "Asia/Seoul",
     "West Central US": "America/Chicago",
-    # Add more regions as needed
 }

@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 from utils.ml_logging import get_logger
 
 # Set up logger
@@ -18,6 +18,39 @@ class ModelPerformanceVisualizer:
         self.data = data
         self.models = list(data.keys())
         self.df = pd.DataFrame()
+
+    def transpose_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Parse the JSON data into a DataFrame, flattening the best_run and worst_run dictionaries.
+        Separate the best_run and worst_run into a different DataFrame.
+        Return the string representations of both DataFrames.
+        """
+        records = []
+        best_worst_records = []
+        for model, stats in self.data.items():
+            flattened_stats = {'model': model}
+            best_worst_stats = {'model': model}
+            for key, value in stats.items():
+                if isinstance(value, dict):
+                    for sub_key, sub_value in value.items():
+                        if key in ['best_run', 'worst_run']:
+                            best_worst_stats[f"{key}_{sub_key}"] = sub_value
+                        else:
+                            flattened_stats[f"{key}_{sub_key}"] = sub_value
+                else:
+                    flattened_stats[key] = value
+            records.append(flattened_stats)
+            best_worst_records.append(best_worst_stats)
+        df = pd.DataFrame.from_records(records)
+        df.rename(columns={'model': 'ModelName_MaxTokens'}, inplace=True)
+        df.set_index('ModelName_MaxTokens', inplace=True)
+        df = df.transpose()
+        df_best_and_worst = pd.DataFrame.from_records(best_worst_records)
+        df_best_and_worst.rename(columns={'model': 'ModelName_MaxTokens'}, inplace=True)
+        df_best_and_worst.set_index('ModelName_MaxTokens', inplace=True)
+        df_best_and_worst = df_best_and_worst.transpose()
+        return df, df_best_and_worst
+        
 
     def parse_data(self) -> None:
         """
