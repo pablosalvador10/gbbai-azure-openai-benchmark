@@ -15,9 +15,6 @@ These metrics are crucial for assessing the operational efficiency of the model,
 - **Latency:** This measures the time taken to receive a response for a request, which is critical for understanding the model's responsiveness.
 - **Throughput:** This evaluates the volume of requests the model can process within a specific timeframe, indicating its capacity to handle workload.
 
-### 📈 Quality Metrics
-#TODO
-
 ## 📝 Pre-requisites
 1. An Azure OpenAI Service resource with a model model deployed with a provisioned deployment (either ```Provisioned``` or ```Provisioned-Managed```) deployment type. For more information, see the [resource deployment guide](https://learn.microsoft.com/azure/ai-services/openai/how-to/create-resource?pivots=web-portal).
 2. A detailed guide on how to set up your environment and get ready to run all the notebooks and code in this repository can be found in the [SETTINGS.md](SETTINGS.md) file. Please follow the instructions there to ensure a smooth experience.
@@ -178,6 +175,9 @@ benchmarking_client.run_tests(
     log_save_dir="logs/",
 )
 ```
+
+## 📈 Model Quality Tests
+#TODO
 
 ## Contributing
 
