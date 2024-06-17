@@ -8,7 +8,6 @@ from scipy import stats
 import geocoder
 from datetime import datetime
 import pytz
-import threading
 import psutil
 
 from typing import List, Tuple, Optional, Dict, Any
@@ -18,6 +17,7 @@ from src.performance.aoaihelpers.constants import AZURE_REGION_TO_TIMEZONE
 
 # Set up logger
 logger = get_logger()
+UTILIZATION_HEADER = "azure-openai-deployment-utilization"
 
 
 def extract_rate_limit_and_usage_info(response: Response) -> Dict[str, Optional[int]]:
@@ -58,6 +58,10 @@ def extract_rate_limit_and_usage_info_async(headers, body_response) -> Dict[str,
     if not retry_after_ms:
         retry_after_ms = headers.get("retry-after")
 
+    if retry_after_ms is None: 
+       logger.debug("retry-after-ms or retry-after is None in headers")
+       retry_after_ms = "NA"
+
     remaining_requests = headers.get("x-ratelimit-remaining-requests")
     if remaining_requests is None:
         logger.warning("x-ratelimit-remaining-requests is None in headers")
@@ -82,7 +86,21 @@ def extract_rate_limit_and_usage_info_async(headers, body_response) -> Dict[str,
     if total_tokens is None:
         logger.warning("total_tokens is None in usage")
 
-    utilization = headers.get("azure-openai-deployment-utilization") or "NA"
+    utilization = headers.get(UTILIZATION_HEADER) or "NA"
+    if utilization != "NA":
+        if len(utilization) == 0:
+            logger.warning(f"got empty utilization header {UTILIZATION_HEADER}")
+        elif utilization[-1] != "%":
+            logger.warning(
+                f"invalid utilization header value: {UTILIZATION_HEADER}={utilization}"
+            )
+        else: 
+            try:
+                utilization = float(utilization[:-1])
+            except ValueError as e:
+                logger.warning(
+                    f"unable to parse utilization header value: {UTILIZATION_HEADER}={util_str}: {e}"
+                )
 
     return {
         "remaining-requests": remaining_requests,
@@ -94,6 +112,7 @@ def extract_rate_limit_and_usage_info_async(headers, body_response) -> Dict[str,
         "utilization": utilization,
         "retry_after_ms": retry_after_ms,
     }
+
 
 def get_local_time(timezone: str) -> str:
     """
@@ -155,25 +174,39 @@ def calculate_statistics(
     - Coefficient of Variation (CV): Ratio of standard deviation to mean. Useful for comparing variability across data series.
     """
     try:
+        logger.info(f"Calculating statistics for data: {data}")
+
         if not data:
-            return None, None, None, None, None
+            result = (None, None, None, None, None)
+            logger.info(f"No data provided. Returning result: {result}")
+            return result
 
         data_array = np.array(data)
+        logger.info(f"Data converted to numpy array: {data_array}")
 
         # Calculate the median
         median = np.median(data_array)
+        logger.info(f"Calculated median: {median}")
 
         # Calculate the IQR
         iqr = stats.iqr(data_array)
+        logger.info(f"Calculated interquartile range (IQR): {iqr}")
 
-        # Calculate the 95th and 99th percentiles
+        # Calculate the 95th percentile
         percentile_95 = np.percentile(data_array, 95)
+        logger.info(f"Calculated 95th percentile: {percentile_95}")
+
+        # Calculate the 99th percentile
         percentile_99 = np.percentile(data_array, 99)
+        logger.info(f"Calculated 99th percentile: {percentile_99}")
 
         # Calculate the coefficient of variation
         cv = stats.variation(data_array)
+        logger.info(f"Calculated coefficient of variation (CV): {cv}")
 
-        return median, iqr, percentile_95, percentile_99, cv
+        result = (median, iqr, percentile_95, percentile_99, cv)
+        logger.info(f"Result: {result}")
+        return result
 
     except Exception as e:
         logger.error(f"An error occurred while calculating statistics: {e}")

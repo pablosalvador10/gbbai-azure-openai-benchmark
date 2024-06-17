@@ -56,11 +56,11 @@ await benchmark_client.run_latency_benchmark_bulk(
 )
 ```
 
-For a deeper understanding of these processes and to master interpreting the nuanced results, our detailed [HOWTO-Latency.md](benchmarks/HOWTO-LATENCY.md) guide is your go-to resource. 
+For a deeper understanding of these processes and to master interpreting the nuanced results, our detailed [HOWTO-Latency.md](benchmarks/HOWTO-Latency.md) guide is your go-to resource. 
 
 ## Throughput Test 
 
-You can run these tests in a script, docker container or Jupyter Notebook. For a deeper understanding of these processes and to master interpreting the nuanced results, our detailed [HOWTO-Throughput.md](benchmarks/HOWTO-LATENCY.md) guide is your go-to resource.  
+You can run these tests in a script, docker container or Jupyter Notebook. For a deeper understanding of these processes and to master interpreting the nuanced results, our detailed [HOWTO-Throughput.md](benchmarks/HOWTO-Throughput.md) guide is your go-to resource.  
 
 ### Common Scenarios:
 The table below provides an example prompt & generation size we have seen with some customers. Actual sizes will vary significantly based on your overall architecture For example,the amount of data grounding you pull into the prompt as part of a chat session can increase the prompt size significantly.

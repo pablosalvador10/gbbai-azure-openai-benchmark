@@ -9,4 +9,6 @@ bandit
 pylint
 pytest
 pytest-cov
+pytest-mock
+pytest-asyncio
 black[jupyter]

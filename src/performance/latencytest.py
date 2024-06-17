@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional
 from termcolor import colored
 import traceback
 
-
 import aiohttp
 from openai import AsyncAzureOpenAI, AzureOpenAI
 from tabulate import tabulate
@@ -18,6 +17,9 @@ from src.performance.aoaihelpers.utils import (
     get_local_time_in_azure_region, log_system_info)
 from src.performance.messagegeneration import (RandomMessagesGenerator)
 from utils.ml_logging import get_logger
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Set up logger
 logger = get_logger()
@@ -69,8 +71,9 @@ class AzureOpenAIBenchmarkLatency(ABC):
         """
         if not all(
             [
-                self.client.api_key,
+                self.api_key,
                 self.azure_endpoint,
+                self.api_version,
             ]
         ):
             raise ValueError(
@@ -190,6 +193,7 @@ class AzureOpenAIBenchmarkLatency(ABC):
             "Model_MaxTokens",
             "Iterations",
             "Regions",
+            "Average Time",
             "Median Time",
             "IQR Time",
             "95th Percentile Time",
@@ -207,6 +211,7 @@ class AzureOpenAIBenchmarkLatency(ABC):
             "Successful Runs",
             "Unsuccessful Runs",
             "Throttle Count",
+            "Throttle Rate",
             "Best Run",
             "Worst Run"
         ]
@@ -214,14 +219,15 @@ class AzureOpenAIBenchmarkLatency(ABC):
             "The maximum number of tokens that the model can handle.",
             "The number of times the test was run.",
             "The geographical regions where the tests were conducted.",
-            "The middle value of time taken for all tests. This is a measure of central tendency.",
+            "The average value of time taken for all succesfull runs.",
+            "The middle value of time taken for all runs. This is a measure of central tendency.",
             "The interquartile range (IQR) of time taken. This is a measure of statistical dispersion, being equal to the difference between 75th and 25th percentiles. IQR is a measure of variability and can help identify outliers.",
             "95% of the times taken are less than this value. This is another way to understand the distribution of values.",
             "99% of the times taken are less than this value. This is used to understand the distribution of values, particularly for identifying and handling outliers.",
             "The coefficient of variation of time taken. This is a normalized measure of the dispersion of the distribution. It's useful when comparing the degree of variation from one data series to another, even if the means are drastically different from each other.",
-            "The middle value of the number of prompt tokens in all tests.",
+            "The middle value of the number of prompt tokens in all succesful runs.",
             "The interquartile range of the number of prompt tokens. This can help identify if the number of prompt tokens varies significantly in the tests.",
-            "The middle value of the number of completion tokens in all tests.",
+            "The middle value of the number of completion tokens in all succesful runs.",
             "The interquartile range of the number of completion tokens. This can help identify if the number of completion tokens varies significantly in the tests.",
             "95% of the completion tokens counts are less than this value.",
             "99% of the completion tokens counts are less than this value.",
@@ -231,6 +237,7 @@ class AzureOpenAIBenchmarkLatency(ABC):
             "The number of tests that were successful.",
             "The number of tests that were not successful.",
             "The number of times the test was throttled or limited.",
+            "The rate at which the test was throttled or limited.",
             "Details of the run with the best (lowest) time.",
             "Details of the run with the worst (highest) time."
         ]
@@ -243,6 +250,7 @@ class AzureOpenAIBenchmarkLatency(ABC):
                 key,
                 data.get("number_of_iterations", "N/A"),
                 region_string,
+                data.get("average_time", "N/A"),
                 data.get("median_time", "N/A"),
                 data.get("iqr_time", "N/A"),
                 data.get("percentile_95_time", "N/A"),
@@ -260,18 +268,22 @@ class AzureOpenAIBenchmarkLatency(ABC):
                 data.get("successful_runs", "N/A"),
                 data.get("unsuccessful_runs", "N/A"),
                 data.get("throttle_count", "N/A"),
+                data.get("throttle_rate", "N/A"),
                 json.dumps(data.get("best_run", {})) if data.get("best_run") else "N/A",
                 json.dumps(data.get("worst_run", {})) if data.get("worst_run") else "N/A",
             ]
             table.append(row)
-
-        table.sort(key=lambda x: x[3])
-
+    
+        try:
+            table.sort(key=lambda x: x[3])
+        except Exception as e:
+            logger.warning(f"An error occurred while sorting the table: {e}")   
+             
         if show_descriptions:
             for header, description in zip(headers, descriptions):
                 print(colored(header, 'blue'))
                 print(description)
-
+    
         print(tabulate(table, headers, tablefmt="pretty"))
         return stats
 
@@ -328,8 +340,7 @@ class AzureOpenAIBenchmarkLatency(ABC):
             self.results[key]["prompt_tokens"].append(headers["prompt_tokens"])
             self.results[key]["regions"].append(
                 headers["region"]
-            )  # Store the region
-
+            )
 
             current_run = {
                 "time": time_taken,
@@ -346,7 +357,7 @@ class AzureOpenAIBenchmarkLatency(ABC):
             if time_taken > self.results[key]["worst_run"]["time"]:
                 self.results[key]["worst_run"] = current_run
         else:
-            self._handle_error(deployment_name, max_tokens, None)
+            self._handle_error(deployment_name, max_tokens, None, "-99")
 
     def _handle_error(
         self, deployment_name: str, max_tokens: int, time_taken:int, response
@@ -383,76 +394,82 @@ class AzureOpenAIBenchmarkLatency(ABC):
         self.results[key]["number_of_iterations"] += 1
         self.results[key]["times_unsucessfull"].append(time_taken)
         if response is not None:
+            if response == "-99":
+                logger.error("Error during API call: No captured time, test client error")
+                self.results[key]["errors"]["codes"].append("-99")
             self.results[key]["errors"]["codes"].append(response.status)
             logger.error(f"Error during API call: {response.text}")
         else:
             logger.error("Error during API call: Unknown error")
 
     def _calculate_statistics(self, data: Dict) -> Dict:
-        """
-        Calculate and return the statistical metrics for test results.
-    
-        :param data: Test data collected.
-        :return: Dictionary of calculated statistical metrics.
-        """
-        total_requests = data["number_of_iterations"]
-        times = list(filter(None, data.get("times_succesful", [])))
-        completion_tokens = list(filter(None, data.get("completion_tokens", [])))
-        prompt_tokens = list(filter(None, data.get("prompt_tokens", [])))
-        error_count = data["errors"]["count"]
-        error_codes = data["errors"]["codes"]
-        error_distribution = {str(code): error_codes.count(code) for code in set(error_codes)}
-        successful_runs = len(data['times_succesful'])
-        unsuccessful_runs = len(data['times_unsucessfull'])
-    
-        stats = {
-            "median_time": None,
-            "regions": list(set(data.get("regions", []))),
-            "iqr_time": None,
-            "percentile_95_time": None,
-            "percentile_99_time": None,
-            "cv_time": None,
-            "median_completion_tokens": None,
-            "iqr_completion_tokens": None,
-            "percentile_95_completion_tokens": None,
-            "percentile_99_completion_tokens": None,
-            "cv_completion_tokens": None,
-            "median_prompt_tokens": None,
-            "iqr_prompt_tokens": None,
-            "percentile_95_prompt_tokens": None,
-            "percentile_99_prompt_tokens": None,
-            "cv_prompt_tokens": None,
-            "error_rate": error_count / total_requests if total_requests > 0 else 0,
-            "number_of_iterations": total_requests,
-            "throttle_count": error_distribution.get('429', 0),
-            "errors_types": data.get("errors", {}).get("codes", []),
-            "successful_runs": successful_runs,
-            "unsuccessful_runs": unsuccessful_runs
-        }
-    
-        if times:
-            stats.update(zip(
-                ["median_time", "iqr_time", "percentile_95_time", "percentile_99_time", "cv_time"],
-                calculate_statistics(times)
-            ))
-    
-        if completion_tokens:
-            stats.update(zip(
-                ["median_completion_tokens", "iqr_completion_tokens", "percentile_95_completion_tokens", "percentile_99_completion_tokens", "cv_completion_tokens"],
-                calculate_statistics(completion_tokens)
-            ))
-    
-        if prompt_tokens:
-            stats.update(zip(
-                ["median_prompt_tokens", "iqr_prompt_tokens", "percentile_95_prompt_tokens", "percentile_99_prompt_tokens", "cv_prompt_tokens"],
-                calculate_statistics(prompt_tokens)
-            ))
-    
-        # Optional: Add best_run and worst_run if they're defined and valid
-        stats["best_run"] = data.get("best_run", {})
-        stats["worst_run"] = data.get("worst_run", {})
-    
-        return stats
+            """
+            Calculate and return the statistical metrics for test results.
+        
+            :param data: Test data collected.
+            :return: Dictionary of calculated statistical metrics.
+            """
+            total_requests = data["number_of_iterations"]
+            times = list(filter(None, data.get("times_succesful", [])))
+            completion_tokens = list(filter(None, data.get("completion_tokens", [])))
+            prompt_tokens = list(filter(None, data.get("prompt_tokens", [])))
+            error_count = data["errors"]["count"]
+            error_codes = data["errors"]["codes"]
+            error_distribution = {str(code): error_codes.count(code) for code in set(error_codes)}
+            count_throw = error_distribution.get('429', 0)
+            successful_runs = len(data['times_succesful'])
+            unsuccessful_runs = len(data['times_unsucessfull'])
+        
+            stats = {
+                "median_time": None,
+                "regions": list(set(data.get("regions", []))),
+                "iqr_time": None,
+                "percentile_95_time": None,
+                "percentile_99_time": None,
+                "cv_time": None,
+                "median_completion_tokens": None,
+                "iqr_completion_tokens": None,
+                "percentile_95_completion_tokens": None,
+                "percentile_99_completion_tokens": None,
+                "cv_completion_tokens": None,
+                "median_prompt_tokens": None,
+                "iqr_prompt_tokens": None,
+                "percentile_95_prompt_tokens": None,
+                "percentile_99_prompt_tokens": None,
+                "cv_prompt_tokens": None,
+                "error_rate": error_count / total_requests if total_requests > 0 else 0,
+                "number_of_iterations": total_requests,
+                "throttle_count": count_throw,
+                "throttle_rate": count_throw / total_requests if total_requests > 0 else 0,
+                "errors_types": data.get("errors", {}).get("codes", []),
+                "average_time": sum(times) / len(times) if times else None,
+                "successful_runs": successful_runs,
+                "unsuccessful_runs": unsuccessful_runs
+            }
+        
+            if times:
+                stats.update(zip(
+                    ["median_time", "iqr_time", "percentile_95_time", "percentile_99_time", "cv_time"],
+                    calculate_statistics(times)
+                ))
+        
+            if completion_tokens:
+                stats.update(zip(
+                    ["median_completion_tokens", "iqr_completion_tokens", "percentile_95_completion_tokens", "percentile_99_completion_tokens", "cv_completion_tokens"],
+                    calculate_statistics(completion_tokens)
+                ))
+        
+            if prompt_tokens:
+                stats.update(zip(
+                    ["median_prompt_tokens", "iqr_prompt_tokens", "percentile_95_prompt_tokens", "percentile_99_prompt_tokens", "cv_prompt_tokens"],
+                    calculate_statistics(prompt_tokens)
+                ))
+        
+            # Optional: Add best_run and worst_run if they're defined and valid
+            stats["best_run"] = data.get("best_run", {})
+            stats["worst_run"] = data.get("worst_run", {})
+        
+            return stats
 
 class AzureOpenAIBenchmarkNonStreaming(AzureOpenAIBenchmarkLatency):
     def __init__(self, api_key, azure_endpoint, api_version="2024-02-15-preview"):
